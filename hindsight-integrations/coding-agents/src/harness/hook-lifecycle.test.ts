@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HOOK_HARNESSES, type HookHarnessName } from "./hook-lifecycle";
 import { DEFAULT_REFLECT_TIMEOUT_MS } from "../core/config";
+import { brandWord } from "../core/brand";
 
 // Derived, not hand-listed: a hand-written roster silently stops covering the newest harness, which
 // is exactly the sibling it most needs to cover. (It had already fallen behind — devin-cli was
@@ -306,6 +307,21 @@ describe("HOOK_HARNESSES lifecycle contract", () => {
         cwd: "/repo",
       })
     ).toEqual({ sessionId: "s1", transcriptPath: "/tmp/s1.jsonl", cwd: "/repo" });
+    // Qoder's TUI prints systemMessage verbatim (no ANSI parsing), so the brand gradient must be
+    // stripped from BOTH user-facing channels. Exercised through the REAL brandWord() so a change
+    // to its escape format cannot silently reintroduce the literal `\u001b[38;2;…m` banner, and
+    // asserted with context present so the model-facing field rides along untouched.
+    const banner = `${brandWord()} is tracking this repo`;
+    expect(banner).toContain("\x1b"); // the input really carries escapes
+    const sessionStartOut = qoder.sessionStart.emit({
+      systemMessage: banner,
+      additionalContext: "context",
+    }) as { systemMessage: string; hookSpecificOutput: { additionalContext: string } };
+    expect(sessionStartOut.systemMessage).toBe("Hindsight is tracking this repo");
+    expect(sessionStartOut.hookSpecificOutput.additionalContext).toBe("context");
+    expect((qoder.prompt.emit("ctx", banner) as { systemMessage: string }).systemMessage).toBe(
+      "Hindsight is tracking this repo"
+    );
     // Qoder's transcript keeps the Claude JSONL schema under its own projects dir, so the DEFAULT
     // reader must apply — a reader of its own would be the drift signal, not the requirement. This
     // also pins that Qoder is NOT a journal host: retain.transcriptPath is claimed above, and the

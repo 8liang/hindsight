@@ -285,6 +285,27 @@ const genieRetain = (
  */
 const notGrokHosted = (): boolean => !process.env.GROK_HOOK_EVENT;
 
+/**
+ * Strip ANSI SGR sequences from an emitted hook output's user-facing `systemMessage`, leaving every
+ * other field (the model-facing context) untouched.
+ *
+ * Qoder's TUI prints `systemMessage` verbatim — it decorates the line with its own `●` prefix and
+ * does NOT interpret escape codes — so brandWord()'s gradient wordmark (core/brand.ts) reached the
+ * user as literal `\u001b[38;2;…m` text. Applied to the qoder-cli spec's user-facing channels
+ * only; the same class of channel limitation the opencode runtime handles before its toast call.
+ */
+const withoutSgrMessage = (emitted: object): object => {
+  const { systemMessage } = emitted as { systemMessage?: unknown };
+  return typeof systemMessage === "string"
+    ? { ...emitted, systemMessage: systemMessage.replace(/\x1b\[[0-9;]*m/g, "") }
+    : emitted;
+};
+
+/** Qoder's user-facing channels go through withoutSgrMessage — see that helper. The bases are
+ *  shared with Claude on purpose: only the delivery differs, never the protocol. */
+const qoderSessionStart = standardSessionStart("qoder-cli");
+const qoderPrompt: HookSpec = { ...claudePrompt, harness: "qoder-cli" };
+
 export const HOOK_HARNESSES: Record<HookHarnessName, HookHarnessSpec> = {
   "claude-code": {
     configStyle: "nested",
@@ -802,8 +823,17 @@ export const HOOK_HARNESSES: Record<HookHarnessName, HookHarnessSpec> = {
       prompt: { event: "UserPromptSubmit", entry: "qoder-hook.js", timeout: 30 },
       stop: { event: "Stop", entry: "qoder-stop-hook.js", timeout: 60 },
     },
-    sessionStart: standardSessionStart("qoder-cli"),
-    prompt: { ...claudePrompt, harness: "qoder-cli" },
+    // Qoder's TUI shows systemMessage as literal text (no ANSI parsing), so both user-facing
+    // channels are stripped of the brand gradient — see withoutSgrMessage.
+    sessionStart: {
+      ...qoderSessionStart,
+      emit: (out) => withoutSgrMessage(qoderSessionStart.emit(out) as object),
+    },
+    prompt: {
+      ...qoderPrompt,
+      emit: (context, notice, ev) =>
+        withoutSgrMessage(qoderPrompt.emit(context, notice, ev) as object),
+    },
     retain: {
       hostTimeoutSec: 60,
       harness: "qoder-cli",
