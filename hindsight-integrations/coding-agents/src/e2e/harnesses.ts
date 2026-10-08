@@ -17,6 +17,10 @@
  * WorkBuddy is absent for the same reason (a desktop app with no documented headless mode), and
  * CodeBuddy Code because driving its CLI needs a Tencent account. Their installers are covered by
  * src/installer.test.ts and their transcript readers by their own unit tests.
+ * Qoder CLI is absent because it needs a Qoder account (interactive login) and ships as a signed
+ * binary fetched by its own installer, not npm — a container cannot authenticate it. Its installer
+ * is covered by src/installer.test.ts and its Claude-compatible hook wire by
+ * src/harness/hook-lifecycle.test.ts.
  */
 import { homedir } from "node:os";
 import { join } from "node:path";

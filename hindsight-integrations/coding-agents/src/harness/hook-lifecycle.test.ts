@@ -273,6 +273,45 @@ describe("HOOK_HARNESSES lifecycle contract", () => {
     expect(kimi.prompt.emit("context", "visible")).toEqual({ message: "context" });
     expect(kimi.prompt.emit("", "visible")).toEqual({ message: "visible" });
     expect(kimi.sessionStart.emit({ systemMessage: "s", additionalContext: "c" })).toEqual({});
+
+    // Qoder CLI inherits the Claude Code wire wholesale (payload in, hookSpecificOutput +
+    // systemMessage out), so the snapshots below pin the FULL shape — a drift here silently turns
+    // off recall or the write-back on the real host.
+    const qoder = HOOK_HARNESSES["qoder-cli"];
+    expect(qoder.configStyle).toBe("nested");
+    expect(qoder.install).toMatchObject({
+      sessionStart: { event: "SessionStart", entry: "qoder-sessionstart-hook.js", timeout: 30 },
+      prompt: { event: "UserPromptSubmit", entry: "qoder-hook.js", timeout: 30 },
+      stop: { event: "Stop", entry: "qoder-stop-hook.js", timeout: 60 },
+    });
+    expect(qoder.prompt.parse({ prompt: "hi", cwd: "/repo", session_id: "s1" })).toEqual({
+      prompt: "hi",
+      cwd: "/repo",
+      sessionId: "s1",
+    });
+    expect(qoder.prompt.emit("context", "visible")).toEqual({
+      systemMessage: "visible",
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: "context",
+      },
+    });
+    expect(qoder.sessionStart.emit({ additionalContext: "context" })).toEqual({
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: "context" },
+    });
+    expect(
+      qoder.retain.parse({
+        session_id: "s1",
+        transcript_path: "/tmp/s1.jsonl",
+        cwd: "/repo",
+      })
+    ).toEqual({ sessionId: "s1", transcriptPath: "/tmp/s1.jsonl", cwd: "/repo" });
+    // Qoder's transcript keeps the Claude JSONL schema under its own projects dir, so the DEFAULT
+    // reader must apply — a reader of its own would be the drift signal, not the requirement. This
+    // also pins that Qoder is NOT a journal host: retain.transcriptPath is claimed above, and the
+    // journal-pairing guard forbids it from holding both.
+    expect(qoder.retain.readTranscript).toBeUndefined();
+    expect(qoder.retain.journal).toBeUndefined();
   });
 
   /**

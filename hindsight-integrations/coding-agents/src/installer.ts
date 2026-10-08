@@ -2334,6 +2334,61 @@ const codebuddy = genieInstaller("codebuddy", ".codebuddy", (home) => [
   join(home, ".codebuddy.json"),
 ]);
 
+/**
+ * Qoder CLI (Alibaba's Qoder coding agent) keeps hooks AND MCP servers in ONE user-level file,
+ * `~/.qoder/settings.json` — the hook block in Claude Code's nested matcher-group shape (Qoder
+ * embeds the Claude Code agent runtime), the servers under a top-level `mcpServers` map. That file
+ * is Qoder's own, never the user's real `~/.claude/settings.json`, and its `qoder hooks
+ * migrate --from-claude` command exists precisely because the two do not overlap. Qoder supports a
+ * workspace-level `.qoder/settings.json` too; this install is user-scope like every other harness's.
+ *
+ * A same-named foreign `hindsight` MCP server blocks install instead of being overwritten (the
+ * zcode precedent): this is a file users hand-edit — Qoder's own settings — and a server they
+ * configured themselves (a remote or the Python MCP) must not be silently replaced by ours.
+ */
+const qoderCli: HarnessInstaller = {
+  name: "qoder-cli",
+  detect: (c) => onPath("qoder") || existsSync(join(c.home, ".qoder")),
+  preflight(c) {
+    const path = join(c.home, ".qoder", "settings.json");
+    const existing = readJson(path).mcpServers?.hindsight;
+    if (existing && !isOurMcpEntry(existing)) {
+      return (
+        `${path} already contains a user-managed MCP server named "hindsight". ` +
+        "Rename or remove that entry, then re-run install."
+      );
+    }
+  },
+  install(c) {
+    const path = join(c.home, ".qoder", "settings.json");
+    const settings = readJson(path);
+    settings.hooks = settings.hooks ?? {};
+    mergeHarnessHooks(settings.hooks, "qoder-cli", c.dist);
+    settings.mcpServers = settings.mcpServers ?? {};
+    settings.mcpServers.hindsight = mcpServerEntry(c.dist, "qoder-cli");
+    writeJson(path, settings);
+    c.log?.(`qoder-cli: hooks + MCP server merged into ${path}`);
+    installSkill(c, "qoder-cli");
+  },
+  uninstall(c) {
+    const path = join(c.home, ".qoder", "settings.json");
+    if (existsSync(path)) {
+      const settings = readJson(path);
+      if (isOurMcpEntry(settings.mcpServers?.hindsight)) {
+        delete settings.mcpServers.hindsight;
+        if (!Object.keys(settings.mcpServers).length) delete settings.mcpServers;
+      }
+      if (settings.hooks) {
+        stripHarnessHooks(settings.hooks, "qoder-cli");
+        if (!Object.keys(settings.hooks).length) delete settings.hooks;
+      }
+      writeJson(path, settings);
+    }
+    uninstallSkill(c, "qoder-cli");
+    c.log?.("qoder-cli: hooks + MCP registration + skill removed");
+  },
+};
+
 export const INSTALLERS: HarnessInstaller[] = [
   opencode,
   opencode2,
@@ -2357,12 +2412,15 @@ export const INSTALLERS: HarnessInstaller[] = [
   traecode,
   workbuddy,
   codebuddy,
+  qoderCli,
 ];
 
 // The public executable was renamed from Gemini CLI to Antigravity's `agy`. Keep the
 // integration's stable internal name for bank identity and hook compatibility, while accepting
 // the executable name users naturally type at the installer prompt.
-const HARNESS_ALIASES: Record<string, string> = { agy: "antigravity-cli" };
+// `qoder` likewise: Qoder CLI's harness id names the PRODUCT (`qoder-cli`, like cursor-cli and
+// copilot-cli), while the binary users have on PATH — and type at the prompt — is `qoder`.
+const HARNESS_ALIASES: Record<string, string> = { agy: "antigravity-cli", qoder: "qoder-cli" };
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────
 

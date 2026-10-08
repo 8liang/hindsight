@@ -81,6 +81,10 @@ export const HARNESS_NAMES = [
   // registration in CodeBuddy's priority-chained MCP file (see src/installer.ts). The CLI
   // writes WorkBuddy's transcript format; the CodeBuddy IDE has a reader of its own.
   "codebuddy",
+  // Qoder CLI is a per-prompt HOOK host: the installer wires ~/.qoder/settings.json (hooks AND the
+  // stdio MCP registration — Qoder keeps both in that one file) — never the user's real Claude Code
+  // settings, even though Qoder speaks Claude's hook protocol (see src/installer.ts).
+  "qoder-cli",
 ];
 
 const HOOK_BINS: Record<string, string> = {
@@ -99,6 +103,7 @@ const HOOK_BINS: Record<string, string> = {
   "kimi-code": "hindsight-kimi-hook",
   workbuddy: "hindsight-workbuddy-hook",
   codebuddy: "hindsight-codebuddy-hook",
+  "qoder-cli": "hindsight-qoder-hook",
   // more hook harnesses: add a HookSpec entry point (see src/cursor-hook.ts) + a registration here.
 };
 

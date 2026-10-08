@@ -124,6 +124,11 @@ export const HARNESS_LOGO_REGISTRY: Record<string, HarnessLogoEntry> = {
   traecode: { id: "traecode", label: "TraeCode", src: "/img/harness/traecode.png" },
   workbuddy: { id: "workbuddy", label: "WorkBuddy", src: "/img/harness/workbuddy.png" },
   codebuddy: { id: "codebuddy", label: "CodeBuddy", src: "/img/harness/codebuddy.png" },
+  // Qoder's app tile: a black glyph on a light rounded square, taken from the
+  // mark qoder.com/docs.qoder.com serve as their favicon. The tile carries its
+  // own background, so no inversion — inverting would burn a dark square into
+  // the dark theme.
+  "qoder-cli": { id: "qoder-cli", label: "Qoder CLI", src: "/img/harness/qoder-cli.png" },
 };
 
 const HARNESS_TAG_PREFIX = "harness:";

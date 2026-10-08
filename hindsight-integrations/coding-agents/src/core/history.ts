@@ -58,9 +58,16 @@ export interface HistoryImport {
  *  replaced by `-` — separators, dots, underscores, spaces, `+`, `@`, all of them. Case is kept,
  *  and runs are not collapsed (`/a-1/-b` -> `-a-1--b`), so this is a 1:1 character substitution.
  *  Verified against Claude Code 2.1.241: `hs_under_test` -> `hs-under-test`, and
- *  `hs+odd@repo v2` -> `hs-odd-repo-v2`. */
+ *  `hs+odd@repo v2` -> `hs-odd-repo-v2`. Qoder CLI inherits the encoding verbatim. It is NOT
+ *  injective (`/a/b` and `/a-b` both give `-a-b`), which is why a candidate directory is only ever
+ *  a prefilter and the cwd recorded inside the session does the attribution. */
+function projectDirName(repoDir: string): string {
+  return repoDir.replace(/[^a-zA-Z0-9]/g, "-");
+}
+
+/** Claude Code's per-project session directory under home. */
 export function claudeProjectDir(repoDir: string, home = homedir()): string {
-  return join(home, ".claude", "projects", repoDir.replace(/[^a-zA-Z0-9]/g, "-"));
+  return join(home, ".claude", "projects", projectDirName(repoDir));
 }
 
 /** pi names a session folder after the working directory it was started in: one leading separator
@@ -157,21 +164,22 @@ function jsonlFiles(dir: string): string[] {
 }
 
 /**
- * Claude Code: one directory per LAUNCH directory, one .jsonl per session.
+ * The Claude Code on-disk session layout — one directory per LAUNCH directory, one .jsonl per
+ * session — which Qoder CLI keeps verbatim under its own config root, so both harnesses share this
+ * reader.
  *
- * Running Claude from a subdirectory creates its own project dir, so an exact match on the repo
+ * Running the agent from a subdirectory creates its own project dir, so an exact match on the repo
  * root silently misses that history (on a real machine, 64 of 107 project dirs were nested under
  * another). Candidate dirs are prefiltered by encoded-name prefix — cheap, since the encoding is
  * order-preserving — and then confirmed against the `cwd` recorded INSIDE each session, because the
  * name alone is ambiguous: `/` and `.` both encode to `-`, so `repo-sub` may be the subdirectory
  * `repo/sub` or an unrelated sibling repo called `repo-sub`.
  */
-function claudeHistory(repoDir: string, home: string): HistoryImport {
-  const root = join(home, ".claude", "projects");
-  const exact = claudeProjectDir(repoDir, home);
+function claudeLayoutHistory(projectsRoot: string, repoDir: string): HistoryImport {
+  const exact = join(projectsRoot, projectDirName(repoDir));
   const prefix = exact + "-";
-  const dirs = listDir(root)
-    .map((d) => join(root, d))
+  const dirs = listDir(projectsRoot)
+    .map((d) => join(projectsRoot, d))
     .filter((d) => d === exact || d.startsWith(prefix));
   const sessions: ChatSession[] = [];
   let unattributed = 0;
@@ -199,6 +207,17 @@ function claudeHistory(repoDir: string, home: string): HistoryImport {
     }
   }
   return { supported: true, sessions, unattributed };
+}
+
+function claudeHistory(repoDir: string, home: string): HistoryImport {
+  return claudeLayoutHistory(join(home, ".claude", "projects"), repoDir);
+}
+
+/** Qoder CLI: the exact Claude Code layout — `~/.qoder/projects/<encoded-cwd>/<session-id>.jsonl`,
+ *  same JSONL schema — under Qoder's own config root (`--config-dir` / `QODER_CONFIG_DIR` relocate
+ *  it, but the default is what backfill can honestly find on disk). */
+function qoderHistory(repoDir: string, home: string): HistoryImport {
+  return claudeLayoutHistory(join(home, ".qoder", "projects"), repoDir);
 }
 
 /**
@@ -470,6 +489,8 @@ export function importLocalHistory(
   switch (harness) {
     case "claude-code":
       return claudeHistory(repoDir, home);
+    case "qoder-cli":
+      return qoderHistory(repoDir, home);
     case "codex":
       return codexHistory(repoDir, home);
     case "dcode":

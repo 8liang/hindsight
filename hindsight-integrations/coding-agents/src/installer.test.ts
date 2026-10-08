@@ -1299,6 +1299,91 @@ describe("codebuddy installer MCP file chain", () => {
   });
 });
 
+// Qoder CLI keeps hooks AND MCP servers in one user-level file, ~/.qoder/settings.json, in Claude
+// Code's shapes (Qoder embeds the Claude Code agent runtime) — its own file, never ~/.claude.
+describe("qoder-cli installer", () => {
+  const settingsPath = (ctx: InstallCtx) => join(ctx.home, ".qoder", "settings.json");
+
+  it("registers the three hooks in ~/.qoder/settings.json, in Claude's nested shape", () => {
+    const ctx = makeCtx();
+    expect(run(["install", "qoder-cli"], ctx)).toBe(0);
+    const hooks = readJson(settingsPath(ctx)).hooks;
+    expect(Object.keys(hooks).sort()).toEqual(["SessionStart", "Stop", "UserPromptSubmit"]);
+    const entry = (ev: string) => hooks[ev][0].hooks[0];
+    for (const ev of ["SessionStart", "Stop", "UserPromptSubmit"]) {
+      expect(entry(ev).type).toBe("command");
+      expect(entry(ev).command).toContain(ctx.dist);
+    }
+    expect(entry("SessionStart").command).toContain("qoder-sessionstart-hook.js");
+    expect(entry("UserPromptSubmit").command).toContain("qoder-hook.js");
+    expect(entry("Stop").command).toContain("qoder-stop-hook.js");
+    expect(entry("SessionStart").timeout).toBe(30);
+    expect(entry("Stop").timeout).toBe(60);
+  });
+
+  it("registers the stdio MCP server in the same settings.json, tagged with its harness", () => {
+    const ctx = makeCtx();
+    expect(run(["install", "qoder-cli"], ctx)).toBe(0);
+    const server = readJson(settingsPath(ctx)).mcpServers.hindsight;
+    expect(server).toMatchObject({ command: "node", env: { HINDSIGHT_MCP_HARNESS: "qoder-cli" } });
+    expect(server.args[0]).toContain("mcp-server.js");
+  });
+
+  it("preserves the rest of the settings, foreign hooks, and foreign MCP servers", () => {
+    const ctx = makeCtx();
+    writeJsonAt(settingsPath(ctx), {
+      enabledPlugins: { "qoder-context@qoderapp-bundler": true },
+      hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "their-hook" }] }] },
+      mcpServers: { "cocos-cocos-780e3c": { type: "http", url: "http://127.0.0.1:8765/" } },
+    });
+    expect(run(["install", "qoder-cli"], ctx)).toBe(0);
+    const settings = readJson(settingsPath(ctx));
+    expect(settings.enabledPlugins).toBeDefined();
+    expect(settings.hooks.PreToolUse).toBeDefined();
+    expect(JSON.stringify(settings.hooks)).toContain("their-hook");
+    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+    expect(settings.mcpServers["cocos-cocos-780e3c"]).toBeDefined();
+    expect(settings.mcpServers.hindsight).toBeDefined();
+  });
+
+  it("refuses to overwrite a user-managed MCP server already named hindsight", () => {
+    const ctx = makeCtx();
+    writeJsonAt(settingsPath(ctx), {
+      mcpServers: { hindsight: { command: "their-own-proxy", args: ["serve"] } },
+    });
+    expect(run(["install", "qoder-cli"], ctx)).not.toBe(0);
+    expect(readJson(settingsPath(ctx)).mcpServers.hindsight.command).toBe("their-own-proxy");
+  });
+
+  it("is idempotent — a second install replaces our entries rather than stacking them", () => {
+    const ctx = makeCtx();
+    expect(run(["install", "qoder-cli"], ctx)).toBe(0);
+    expect(run(["install", "qoder-cli"], ctx)).toBe(0);
+    expect(readJson(settingsPath(ctx)).hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it("uninstall removes our hooks and MCP entry, keeping a foreign server", () => {
+    const ctx = makeCtx();
+    writeJsonAt(settingsPath(ctx), { mcpServers: { affine: { command: "npx" } } });
+    expect(run(["install", "qoder-cli"], ctx)).toBe(0);
+    expect(run(["uninstall", "qoder-cli"], ctx)).toBe(0);
+    expect(readJson(settingsPath(ctx)).hooks).toBeUndefined();
+    const servers = readJson(settingsPath(ctx)).mcpServers;
+    expect(servers.affine).toBeDefined();
+    expect(servers.hindsight).toBeUndefined();
+  });
+
+  // The harness id names the product ("qoder-cli", like cursor-cli and copilot-cli); the binary on
+  // PATH — what users type at the prompt — is `qoder`, so the alias must resolve to it.
+  it("accepts `qoder` (the executable name) as an alias for qoder-cli", () => {
+    const ctx = makeCtx();
+    expect(run(["install", "qoder"], ctx)).toBe(0);
+    expect(readJson(settingsPath(ctx)).mcpServers.hindsight.env.HINDSIGHT_MCP_HARNESS).toBe(
+      "qoder-cli"
+    );
+  });
+});
+
 describe("codex installer", () => {
   const hooksPath = (ctx: InstallCtx) => join(ctx.home, ".codex", "hooks.json");
   const tomlPath = (ctx: InstallCtx) => join(ctx.home, ".codex", "config.toml");
@@ -2469,6 +2554,7 @@ describe("run() CLI behavior", () => {
       "traecode",
       "workbuddy",
       "codebuddy",
+      "qoder-cli",
     ]);
   });
 });

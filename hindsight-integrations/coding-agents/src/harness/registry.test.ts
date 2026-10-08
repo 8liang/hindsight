@@ -31,9 +31,10 @@ describe("HARNESS_NAMES", () => {
         "kimi-code",
         "workbuddy",
         "codebuddy",
+        "qoder-cli",
       ])
     );
-    expect(HARNESS_NAMES).toHaveLength(22);
+    expect(HARNESS_NAMES).toHaveLength(23);
   });
 
   // Family guard: a new harness that lands without a Docker E2E setup is never driven through its
@@ -47,7 +48,10 @@ describe("HARNESS_NAMES", () => {
     // WorkBuddy ships inside Tencent's desktop app — same story as TraeCode: no documented
     // headless mode a container could drive. CodeBuddy Code has a CLI, but driving it needs a
     // Tencent account. Both are covered by installer.test.ts and their transcript-reader tests.
-    const exempt = new Set(["antigravity-cli", "traecode", "workbuddy", "codebuddy"]);
+    // Qoder CLI needs a Qoder account (interactive login) and ships as a signed binary fetched by
+    // its own installer rather than npm — a container cannot authenticate it. Covered by
+    // installer.test.ts and hook-lifecycle.test.ts, which pin the Claude-compatible wire.
+    const exempt = new Set(["antigravity-cli", "traecode", "workbuddy", "codebuddy", "qoder-cli"]);
     const root = fileURLToPath(new URL("../..", import.meta.url));
     const setups = new Set(ALL_HARNESS_SETUPS.map((setup) => setup.name));
     for (const name of HARNESS_NAMES.filter((n) => !exempt.has(n))) {

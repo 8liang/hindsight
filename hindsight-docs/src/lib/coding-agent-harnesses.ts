@@ -52,6 +52,7 @@ export const CODING_AGENT_HARNESSES: CodingAgentHarness[] = [
   {id: 'dsh', label: 'DeepSeek Harness', file: 'dsh.svg'},
   {id: 'workbuddy', label: 'WorkBuddy', file: 'workbuddy.png'},
   {id: 'codebuddy', label: 'CodeBuddy', file: 'codebuddy.png'},
+  {id: 'qoder-cli', label: 'Qoder CLI', file: 'qoder-cli.png'},
 ];
 
 /** Public path of a harness icon, for surfaces that want the URL rather than the file name. */

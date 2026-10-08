@@ -6,7 +6,7 @@ import CodingAgentsChart from '@site/src/components/CodingAgentsChart';
 
 Long-term project memory for **coding agents**, backed by [Hindsight](https://vectorize.io/hindsight).
 One package, several agents: a shared reflect-and-inject core with a thin entry point per agent
-(**Claude Code**, **Codex CLI**, **DeepAgents Dcode**, **opencode**, **opencode 2**, **Kilo CLI**, **Cursor CLI**, **GitHub Copilot CLI**, **Grok Build**, **Qwen Code**, **Kimi Code**, **Factory Droid**, **ZCode**, **TraeCode**, **Antigravity CLI**, **Devin CLI**, **Cline CLI**, **pi**, **Prime Agent**, **DeepSeek Harness**, **WorkBuddy**, **CodeBuddy**). Ingestion is fully
+(**Claude Code**, **Codex CLI**, **DeepAgents Dcode**, **opencode**, **opencode 2**, **Kilo CLI**, **Cursor CLI**, **GitHub Copilot CLI**, **Grok Build**, **Qwen Code**, **Kimi Code**, **Factory Droid**, **ZCode**, **TraeCode**, **Antigravity CLI**, **Devin CLI**, **Cline CLI**, **pi**, **Prime Agent**, **DeepSeek Harness**, **WorkBuddy**, **CodeBuddy**, **Qoder CLI**). Ingestion is fully
 automatic — there is no setup command: a repo's git history and conversations flow into its memory
 bank in the background as you work.
 
@@ -417,6 +417,22 @@ per-conversation directory instead — `CodeBuddyIDE/<uid>/history/<md5(workspac
 whose `index.json` _is_ the `transcript_path` and whose prose sits one level down, in
 `messages/<messageId>.json` — so the reader dispatches on the shape it was handed
 (core/transcript-codebuddy-ide.ts).
+
+####  Qoder CLI
+
+```bash
+npx @vectorize-io/hindsight-coding-agents install qoder-cli
+```
+
+3 hooks in `~/.qoder/settings.json`, the stdio MCP server in the same file (Qoder keeps hooks and
+servers in one user-level config), and the companion skill in `~/.qoder/skills`. Qoder CLI embeds the
+Claude Code agent runtime, so its hooks speak Claude Code's protocol field for field — the same
+payload (`session_id`, `transcript_path`, `cwd`), the same `hookSpecificOutput.additionalContext` /
+`systemMessage` output, the same nested matcher-group config and seconds-based timeouts — and its
+session transcripts keep the Claude JSONL layout under `~/.qoder/projects/`. The difference is
+_where_: every file Qoder reads lives under `~/.qoder` (relocatable with `--config-dir`), never
+`~/.claude`. The harness id names the product, so `install qoder-cli` and `install qoder` (the name
+of the executable) are the same thing.
 
 Uninstall the same way: `npx @vectorize-io/hindsight-coding-agents uninstall claude-code` (or `uninstall all`).
 

@@ -37,7 +37,8 @@ export type HookHarnessName =
   | "traecode"
   | "kimi-code"
   | "workbuddy"
-  | "codebuddy";
+  | "codebuddy"
+  | "qoder-cli";
 export type HookLifecycle = "sessionStart" | "prompt" | "stop";
 /**
  * How the HOST spells one hook registration.
@@ -779,6 +780,39 @@ export const HOOK_HARNESSES: Record<HookHarnessName, HookHarnessSpec> = {
     sessionStart: genieSessionStart("codebuddy"),
     prompt: geniePrompt("codebuddy"),
     retain: genieRetain("codebuddy", readCodebuddyTranscript),
+  },
+  /**
+   * Qoder CLI (Alibaba's coding agent) embeds the Claude Code agent runtime, so its hook PROTOCOL
+   * is Claude's field for field: nested matcher groups in the host's settings.json, `session_id` /
+   * `transcript_path` / `cwd` in, `hookSpecificOutput.additionalContext` + `systemMessage` out, and
+   * `timeout` in seconds. `UserPromptSubmit` carries the submission as `prompt`, and `Stop` carries
+   * the transcript path plus `last_assistant_message`.
+   *
+   * What is not Claude's is only WHERE everything lives. Qoder reads its own config root
+   * (`~/.qoder` — relocatable via `--config-dir` / `QODER_CONFIG_DIR`, which is also how its hooks
+   * receive it): the installer must write `~/.qoder/settings.json`, never the user's real Claude Code
+   * settings. Its transcripts keep the Claude JSONL schema under its own projects dir
+   * (`~/.qoder/projects/<encoded-cwd>/<session-id>.jsonl`), so the DEFAULT transcript reader
+   * applies and this spec needs no reader of its own.
+   */
+  "qoder-cli": {
+    configStyle: "nested",
+    install: {
+      sessionStart: { event: "SessionStart", entry: "qoder-sessionstart-hook.js", timeout: 30 },
+      prompt: { event: "UserPromptSubmit", entry: "qoder-hook.js", timeout: 30 },
+      stop: { event: "Stop", entry: "qoder-stop-hook.js", timeout: 60 },
+    },
+    sessionStart: standardSessionStart("qoder-cli"),
+    prompt: { ...claudePrompt, harness: "qoder-cli" },
+    retain: {
+      hostTimeoutSec: 60,
+      harness: "qoder-cli",
+      parse: (ev) => ({
+        sessionId: ev.session_id as string | undefined,
+        transcriptPath: ev.transcript_path as string | undefined,
+        cwd: ev.cwd as string | undefined,
+      }),
+    },
   },
 };
 

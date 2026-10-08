@@ -50,6 +50,8 @@ export const SKILL_DIRS: Record<string, string[]> = {
   // CodeBuddy Code reads that SAME engine's default root, ~/.codebuddy — WorkBuddy only overrides
   // its home folder (product config `dataLayout.configDir.userDirName`), so the two differ by config.
   codebuddy: [".codebuddy", "skills"],
+  // Qoder CLI's user-level skills root, alongside settings.json in its config root.
+  "qoder-cli": [".qoder", "skills"],
 };
 
 /**

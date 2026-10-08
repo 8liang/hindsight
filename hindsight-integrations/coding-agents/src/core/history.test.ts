@@ -131,6 +131,42 @@ describe("local history import", () => {
     expect(JSON.stringify(r.sessions)).not.toContain("the other one");
   });
 
+  // Qoder CLI keeps the Claude layout under its own config root — ~/.qoder/projects/<encoded>/ —
+  // with the same JSONL schema plus host-only record types the reader must skip, not choke on.
+  it("reads Qoder sessions from ~/.qoder/projects and ignores its non-message records", () => {
+    const h = newHome();
+    const repo = "/Users/x/dev/myrepo";
+    const dir = join(h, ".qoder", "projects", "-Users-x-dev-myrepo");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "3879f74a.jsonl"),
+      [
+        JSON.stringify({
+          type: "workspace-directories",
+          sessionId: "3879f74a",
+          directories: [repo],
+        }),
+        JSON.stringify({ type: "runtime-config", sessionId: "3879f74a", model: "dfmodel" }),
+        claudeLine("user", "why retry 429?", repo),
+        claudeLine("assistant", "because backpressure"),
+        JSON.stringify({ type: "active-leaf", sessionId: "3879f74a", leafUuid: "u1" }),
+      ].join("\n") + "\n"
+    );
+    // The SAME encoded dir name under Claude's root is not Qoder's history and must not be read.
+    const claudeDir = join(h, ".claude", "projects", "-Users-x-dev-myrepo");
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, "other.jsonl"), `${claudeLine("user", "claude only", repo)}\n`);
+
+    const r = importLocalHistory("qoder-cli", repo, h);
+
+    expect(r.supported).toBe(true);
+    expect(r.sessions).toHaveLength(1);
+    expect(r.sessions[0].id).toBe("3879f74a");
+    expect(JSON.stringify(r.sessions[0].turns)).toContain("why retry 429?");
+    expect(JSON.stringify(r.sessions)).not.toContain("claude only");
+    expect(JSON.stringify(r.sessions)).not.toContain("workspace-directories");
+  });
+
   it("matches Codex rollouts by the cwd in their session_meta header", () => {
     const h = newHome();
     const day = join(h, ".codex", "sessions", "2026", "08", "03");
